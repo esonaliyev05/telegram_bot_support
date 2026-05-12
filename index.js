@@ -11,32 +11,24 @@ if (!ADMIN_ID) throw new Error("❌ ADMIN_ID topilmadi. .env faylni tekshir!");
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
-// ====================== PAPKA VA FAYLLAR ======================
+// ====================== SOZLAMALAR ======================
 const DATA_DIR = "./data";
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const GROUPS_FILE = path.join(DATA_DIR, "groups.json");
 const BANNED_FILE = path.join(DATA_DIR, "banned.json");
-const LOGS_FILE = path.join(DATA_DIR, "logs.json");
 
 let users = new Map();
 let groups = new Map();
 let bannedUsers = new Set();
 let userState = new Map();
 
-// Papkani yaratish
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
-// ====================== MA’LUMOTLarni YUKLASH ======================
+// Ma'lumotlarni yuklash
 const loadData = () => {
-  if (fs.existsSync(USERS_FILE)) {
-    users = new Map(JSON.parse(fs.readFileSync(USERS_FILE, "utf8")));
-  }
-  if (fs.existsSync(GROUPS_FILE)) {
-    groups = new Map(JSON.parse(fs.readFileSync(GROUPS_FILE, "utf8")));
-  }
-  if (fs.existsSync(BANNED_FILE)) {
-    bannedUsers = new Set(JSON.parse(fs.readFileSync(BANNED_FILE, "utf8")));
-  }
+  if (fs.existsSync(USERS_FILE)) users = new Map(JSON.parse(fs.readFileSync(USERS_FILE)));
+  if (fs.existsSync(GROUPS_FILE)) groups = new Map(JSON.parse(fs.readFileSync(GROUPS_FILE)));
+  if (fs.existsSync(BANNED_FILE)) bannedUsers = new Set(JSON.parse(fs.readFileSync(BANNED_FILE)));
 };
 
 const saveData = () => {
@@ -45,97 +37,72 @@ const saveData = () => {
   fs.writeFileSync(BANNED_FILE, JSON.stringify(Array.from(bannedUsers), null, 2));
 };
 
-const logAction = (action, userId, details = "") => {
-  const log = { time: new Date().toISOString(), action, userId, details };
-  let logs = fs.existsSync(LOGS_FILE) ? JSON.parse(fs.readFileSync(LOGS_FILE, "utf8")) : [];
-  logs.push(log);
-  if (logs.length > 1000) logs.shift();
-  fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
-};
-
-// ====================== JUDA KO‘P AUTO REPLIES ======================
+// ====================== KATTA AUTO REPLIES (Ijtimoiy tarmoqlar + Bog'lanish) ======================
 const autoReplies = new Map([
-  // Salomlashish
+  // Salomlashish va ahvol
   ["salom", "Salom! 👋 Qanday yordam bera olaman?"],
-  ["assalom", "Va alaykum assalom! 😊 Ahvolingiz yaxshimi?"],
-  ["assalomu alaykum", "Va alaykum assalom! 👋 Yaxshimisiz?"],
-
-  // Ahvol so‘rash
-  ["qalaysiz", "Rahmat, yaxshiman! Sizchi qalaysiz?"],
+  ["assalom", "Va alaykum assalom! 😊 Yaxshimisiz?"],
+  ["assalomu alaykum", "Va alaykum assalom! 👋 Ahvolingiz qalay?"],
+  ["qalaysiz", "Rahmat, yaxshiman! Sizchi?"],
   ["qalay", "Zo‘r, rahmat! Siz qalaysiz?"],
-  ["ahvolingiz", "Shukur, yaxshi. Sizda yangiliklar bormi?"],
-  ["qandaysiz", "Yaxshiman, rahmat. Siz-chi?"],
 
-  // Bot haqida
+  // Bot va men haqida
   ["kim bu", "Men Esonaliyev Alyorbekning shaxsiy yordamchi botiman."],
   ["kimsen", "Alyorbekning Telegram botiman 😊"],
   ["sen kim", "Esonaliyev Alyorbekning yordamchi boti"],
-  ["bot", "Ha, men Alyorbekning aqlli yordamchi botiman."],
 
-  // Yordam
-  ["yordam", "Albatta! Savolingizni yozing, yordam beraman."],
-  ["yordam bera", "Yordam berishga tayyorman. Nima haqida gaplashamiz?"],
-  ["nima qila", "Savollarga javob beraman, admin bilan bog‘layman."],
+  // Men bilan bog'lanish
+  ["bog'lanish", "Esonaliyev Alyorbek bilan bog‘lanish uchun admin tugmasini bosing yoki ijtimoiy tarmoqlarga o‘ting."],
+  ["men bilan bog'lan", "Alyorbek bilan bog‘lanmoqchimisiz? Quyidagi ijtimoiy tarmoqlarga yozing:"],
+  ["alyor", "Alyorbek bilan gaplashmoqchimisiz? Admin tugmasini bosing yoki ijtimoiy sahifalarga o‘ting."],
+  ["kontakt", "Alyorbek bilan bog‘lanish uchun quyidagilardan foydalaning:"],
+  ["telefon", "Telefon raqam orqali bog‘lanish uchun admin bilan yozishingiz mumkin."],
+  ["instagram", "Instagram: @yourinstagram"],
+  ["youtube", "YouTube: @youryoutube"],
+  ["telegram kanal", "Telegram Kanal: @yourchannel"],
 
-  // Rahmat
+  // Ijtimoiy tarmoqlar haqida savollar
+  ["ijtimoiy", "Esonaliyev Alyorbekning ijtimoiy tarmoqlari:"],
+  ["sahifa", "Quyidagi sahifalarga obuna bo‘ling:"],
+  ["instagramda", "Instagram: @yourinstagram"],
+  ["tg kanal", "Telegram Kanal: @yourchannel"],
+  ["youtube kanal", "YouTube: @youryoutube"],
+
+  // Yordam va rahmat
+  ["yordam", "Albatta! Savolingizni yozing yoki Alyorbek bilan bog‘laning."],
   ["rahmat", "Arzimaydi! 😊 Yana savollaringiz bo‘lsa yozing."],
-  ["katta rahmat", "Hech gap emas, xizmatga tayyorman!"],
-  ["raxmat", "Arzimaydi! Doim yordam beraman."],
+  ["katta rahmat", "Hech gap emas!"],
 
-  // Vaqt
-  ["xayrli tong", "Xayrli tong! ☀️ Bugun qanday o‘tadi?"],
-  ["xayrli kun", "Xayrli kun! 😊"],
-  ["xayrli kech", "Xayrli kech! 🌙 Dam oling."],
-  ["tun yaxshi", "Yaxshi tun! 🌙"],
+  // Vaqt va boshqa
+  ["xayrli tong", "Xayrli tong! ☀️"],
+  ["xayrli kech", "Xayrli kech! 🌙"],
   ["hayr", "Hayr! Yana ko‘rishguncha 👋"],
-
-  // Ijobiy javoblar
   ["zo'r", "Rahmat! Siz ham zo‘rsiz 😎"],
   ["super", "Super! 🔥"],
-  ["yaxshi", "Bu juda yaxshi eshitiladi!"],
-  ["qanday", "Zo‘r! Sizchi?"],
 
-  // Savol va admin
-  ["savol", "Savolingizni yozing, admin javob beradi."],
-  ["admin", "Admin bilan gaplashmoqchimisiz? Xabaringizni yozing."],
-
-  // Shaxsiy savollar
+  // Qo'shimcha
+  ["nima qilasiz", "Foydalanuvchilarga yordam beraman va Alyorbek bilan bog‘layman."],
   ["necha yosh", "Men botman, yoshim yo‘q 😄"],
   ["qayerdansan", "Men serverda yashayman, egam Esonaliyev Alyorbek."],
-  ["ishlayapsizmi", "Men 24/7 ishlayman. Siz nima bilan bandisiz?"],
-  ["o'qiysizmi", "Men o‘qimayman, lekin sizga yordam beraman 📚"],
-
-  // Qo‘shimcha keng tarqalgan
-  ["bor", "Ha, bor! Nima kerak?"],
-  ["yo'q", "Tushundim. Boshqa savol bo‘lsa yozing."],
-  ["ha", "Yaxshi, davom eting 😊"],
-  ["charchadim", "Dam oling, keyin yozing."],
-  ["uyqum kelyapti", "Yaxshi uxlang! Ertaga yozing."],
-  ["qiziq", "Qiziqarli! Yana nima deysiz?"],
-  ["kulgi", "😂"],
   ["haha", "😂 Qiziq ekan!"],
-
-  // Vaqtinchalik javoblar
-  ["kechirasiz", "Hech narsa yo‘q, ayting."],
-  ["keting", "Yaxshi, keyinroq yozaman."],
-  ["hozir band", "Tushundim, qachon bo‘sh bo‘lsangiz yozing."],
+  ["charchadim", "Dam oling, keyin yozing."],
 ]);
 
-// ====================== YORDAMCHI FUNKSIYALAR ======================
-const isAdmin = (chatId) => chatId === ADMIN_ID;
-const isBanned = (userId) => bannedUsers.has(userId);
-
-const sendToAdmin = (text, options = {}) => {
-  bot.sendMessage(ADMIN_ID, text, { parse_mode: "HTML", ...options }).catch(() => {});
-};
+// ====================== IJTIMOIY TARMOQLAR MENU ======================
+const socialText = `🌐 <b>Esonaliyev Alyorbekning ijtimoiy tarmoqlari</b>\n\n` +
+  `📸 Instagram: @yourinstagram\n` +
+  `📺 YouTube: @youryoutube\n` +
+  `📢 Telegram Kanal: @yourchannel\n` +
+  `💬 Telegram: @yourusername\n\n` +
+  `Obuna bo‘ling va yangiliklardan xabardor bo‘ling!`;
 
 const mainKeyboard = {
   resize_keyboard: true,
   keyboard: [
     ["💬 Savol berish"],
     ["👨‍💻 Admin bilan gaplashish"],
-    ["❓ FAQ"],
-    ["ℹ️ Bot haqida"]
+    ["🌐 Ijtimoiy tarmoqlar"],
+    ["❓ FAQ"]
   ]
 };
 
@@ -145,103 +112,82 @@ bot.onText(/\/start/, async (msg) => {
   const isGroup = msg.chat.type !== "private";
 
   if (isGroup) {
-    groups.set(chatId, { title: msg.chat.title, addedAt: Date.now() });
+    groups.set(chatId, { title: msg.chat.title || "Guruh", addedAt: Date.now() });
     saveData();
-    return bot.sendMessage(chatId, "✅ Bot guruhga qo‘shildi! Admin xabar yuborishi mumkin.");
-  }
-
-  if (isBanned(chatId)) {
-    return bot.sendMessage(chatId, "❌ Siz botdan bloklangansiz.");
+    return bot.sendMessage(chatId, "✅ Bot guruhga qo‘shildi!");
   }
 
   users.set(chatId, {
-    username: msg.from.username,
     firstName: msg.from.first_name,
+    username: msg.from.username,
     lastActive: Date.now()
   });
   saveData();
-  logAction("start", chatId);
 
-  await bot.sendMessage(chatId, `👋 <b>Assalomu alaykum, ${msg.from.first_name}!</b>\n\nMen <b>Esonaliyev Alyorbek</b>ning shaxsiy botiman.`, {
+  bot.sendMessage(chatId, `👋 <b>Assalomu alaykum, ${msg.from.first_name}!</b>\n\nMen Esonaliyev Alyorbekning shaxsiy yordamchi botiman.`, {
     parse_mode: "HTML",
     reply_markup: mainKeyboard
   });
 
-  sendToAdmin(`🆕 Yangi foydalanuvchi:\nID: <code>${chatId}</code>\nIsm: ${msg.from.first_name}`);
+  bot.sendMessage(ADMIN_ID, `🆕 Yangi user: <code>${chatId}</code> - ${msg.from.first_name}`, { parse_mode: "HTML" });
 });
 
-// ====================== FAQ VA INFO ======================
+// ====================== MENU HANDLER ======================
+bot.onText(/🌐 Ijtimoiy tarmoqlar/, (msg) => {
+  bot.sendMessage(msg.chat.id, socialText, { parse_mode: "HTML" });
+});
+
 bot.onText(/❓ FAQ|\/faq/, (msg) => {
-  bot.sendMessage(msg.chat.id, "❓ Savolingizni yozing yoki «👨‍💻 Admin bilan gaplashish» tugmasini bosing.", { parse_mode: "HTML" });
+  bot.sendMessage(msg.chat.id, "❓ Savolingizni yozing yoki «👨‍💻 Admin bilan gaplashish» tugmasini bosing.");
 });
 
-bot.onText(/ℹ️ Bot haqida|\/info/, (msg) => {
-  bot.sendMessage(msg.chat.id, "🤖 <b>Esonaliyev Alyorbekning shaxsiy boti</b>\n\nDoimiy ravishda takomillashtirilmoqda.", { parse_mode: "HTML" });
-});
-
-// ====================== ASOSIY HANDLER ======================
+// ====================== ASOSIY MESSAGE HANDLER ======================
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text?.trim();
   if (!text) return;
 
-  if (isAdmin(chatId)) {
-    // Admin buyruqlari (oldingi versiyadagi kabi qoldim, qisqartirdim)
-    if (text === "/users" || text === "/stats") {
-      bot.sendMessage(chatId, `👤 Foydalanuvchilar: ${users.size}\n👥 Guruhlar: ${groups.size}`);
-    }
-
-    if (msg.reply_to_message) {
-      const match = msg.reply_to_message.text?.match(/User ID: (\d+)/);
-      if (match) {
-        bot.sendMessage(match[1], `👨‍💻 <b>Admin javobi:</b>\n\n${text}`, { parse_mode: "HTML" });
-      }
+  // Admin javobi
+  if (chatId === ADMIN_ID && msg.reply_to_message) {
+    const match = msg.reply_to_message.text?.match(/User ID: (\d+)/);
+    if (match) {
+      bot.sendMessage(match[1], `👨‍💻 <b>Admin javobi:</b>\n\n${text}`, { parse_mode: "HTML" });
     }
     return;
   }
 
-  // Oddiy foydalanuvchi
-  if (isBanned(chatId)) return;
-
-  users.set(chatId, { ...users.get(chatId), lastActive: Date.now() });
-  saveData();
-
-  // ====================== AUTO REPLIES ======================
-  const lowerText = text.toLowerCase();
-  let replied = false;
-
+  // Auto Replies
+  const lower = text.toLowerCase();
   for (const [key, reply] of autoReplies) {
-    if (lowerText.includes(key)) {
-      bot.sendMessage(chatId, reply);
-      replied = true;
-      break;
+    if (lower.includes(key)) {
+      if (key === "men bilan bog'lan" || key === "bog'lanish" || key === "kontakt") {
+        return bot.sendMessage(chatId, socialText, { parse_mode: "HTML" });
+      }
+      return bot.sendMessage(chatId, reply);
     }
   }
 
-  if (replied) return;
-
-  // Menu tugmalari
-  if (["💬 Savol berish", "👨‍💻 Admin bilan gaplashish"].includes(text)) {
+  // Tugmalar
+  if (text === "💬 Savol berish" || text === "👨‍💻 Admin bilan gaplashish") {
     userState.set(chatId, true);
-    return bot.sendMessage(chatId, "✍️ Xabaringizni yozing, admin javob beradi...");
+    return bot.sendMessage(chatId, "✍️ Xabaringizni yozing, Alyorbek javob beradi...");
   }
 
-  // Admin ga yuborish
+  // Xabarni adminga yuborish
   if (userState.get(chatId) || text.length > 3) {
     const forwardText = `📩 <b>Yangi xabar</b>\n\nUser ID: <code>${chatId}</code>\nIsm: ${msg.from.first_name}\nUsername: @${msg.from.username || "yo‘q"}\n\n💬 ${text}`;
-
-    sendToAdmin(forwardText);
+    
+    bot.sendMessage(ADMIN_ID, forwardText, { parse_mode: "HTML" });
 
     if (msg.photo || msg.document || msg.voice || msg.video) {
       bot.forwardMessage(ADMIN_ID, chatId, msg.message_id);
     }
 
-    bot.sendMessage(chatId, "✅ Xabaringiz adminga yetkazildi. Javobni kuting.");
+    bot.sendMessage(chatId, "✅ Xabaringiz Alyorbekka yetkazildi. Javobni kuting.");
     userState.delete(chatId);
   }
 });
 
-// ====================== XATOLAR ======================
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
-console.log("🚀 Esonaliyev Alyorbekning boti muvaffaqiyatli ishga tushdi!");
+console.log("🚀 Esonaliyev Alyorbekning boti ishga tushdi! (Ijtimoiy tarmoqlar + Bog'lanish qo'shildi)");
